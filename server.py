@@ -1,9 +1,9 @@
 """Bolkar — speak a bug in Hinglish, get a filed-ready GitHub issue.
-Single-file Flask app over AssemblyAI's Dictation API.
-ponytail: ffmpeg transcodes the browser blob to 16k WAV, so the host needs ffmpeg
-on PATH. Swap for in-browser WAV encoding if you deploy somewhere without it.
+Local dev server. The browser encodes a 16 kHz mono WAV and sends it base64,
+so there is no server-side transcode. Production runs the same logic as a Vercel
+serverless function in api/report.js.
 """
-import json, subprocess, pathlib, requests
+import base64, json, pathlib, requests
 from flask import Flask, request, jsonify, Response
 
 ROOT = pathlib.Path(__file__).parent
@@ -25,25 +25,14 @@ PRESETS = {
 app = Flask(__name__)
 
 
-def to_wav(blob: bytes) -> bytes:
-    p = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", "pipe:0",
-                        "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", "-f", "wav", "pipe:1"],
-                       input=blob, capture_output=True)
-    if p.returncode != 0:
-        raise RuntimeError(p.stderr.decode()[:300])
-    return p.stdout
-
-
 @app.post("/api/report")
 def report():
-    audio = request.files.get("audio")
-    if not audio:
+    body = request.get_json(silent=True) or {}
+    b64 = body.get("audio_b64")
+    if not b64:
         return jsonify(error="no audio"), 400
-    preset = request.form.get("preset", "bug")
-    try:
-        wav = to_wav(audio.read())
-    except RuntimeError as e:
-        return jsonify(error=f"transcode failed: {e}"), 400
+    preset = body.get("preset", "bug")
+    wav = base64.b64decode(b64)
     config = {"language_codes": ["hi", "en"], "llm_instruction": PRESETS.get(preset, PRESETS["bug"])}
     r = requests.post(URL, headers={"Authorization": KEY},
                       files={"audio": ("clip.wav", wav, "audio/wav")},

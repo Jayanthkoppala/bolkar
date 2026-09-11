@@ -6,3 +6,5 @@ venv/
 
 *.aiff
 *.log
+.vercel
+.env*
