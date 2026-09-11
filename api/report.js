@@ -24,11 +24,12 @@ export default async function handler(req, res) {
   if (!audio_b64) return res.status(400).json({ error: "no audio" });
 
   const wav = Buffer.from(audio_b64, "base64");
-  const config = { language_codes: ["hi", "en"], llm_instruction: PRESETS[preset] || PRESETS.bug };
-
   const form = new FormData();
   form.append("audio", new Blob([wav], { type: "audio/wav" }), "clip.wav");
-  form.append("config", JSON.stringify(config));
+  // "default" sends no config, so the API runs its documented default cleanup.
+  if (preset !== "default") {
+    form.append("config", JSON.stringify({ language_codes: ["hi", "en"], llm_instruction: PRESETS[preset] || PRESETS.bug }));
+  }
 
   let r;
   try {

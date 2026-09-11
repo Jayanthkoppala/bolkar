@@ -33,10 +33,13 @@ def report():
         return jsonify(error="no audio"), 400
     preset = body.get("preset", "bug")
     wav = base64.b64decode(b64)
-    config = {"language_codes": ["hi", "en"], "llm_instruction": PRESETS.get(preset, PRESETS["bug"])}
+    data = {}
+    if preset != "default":  # "default" sends no config -> the API's default cleanup
+        config = {"language_codes": ["hi", "en"], "llm_instruction": PRESETS.get(preset, PRESETS["bug"])}
+        data["config"] = json.dumps(config)
     r = requests.post(URL, headers={"Authorization": KEY},
                       files={"audio": ("clip.wav", wav, "audio/wav")},
-                      data={"config": json.dumps(config)}, timeout=90)
+                      data=data, timeout=90)
     if r.status_code != 200:
         return jsonify(error=f"API {r.status_code}: {r.text[:300]}"), 502
     j = r.json()
