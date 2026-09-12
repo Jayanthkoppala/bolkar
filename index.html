@@ -161,10 +161,16 @@ async function send(){
     last=j;
     $("#verbatim").textContent=j.verbatim||"(empty)";
     $("#meta").textContent=`${j.ms} ms · conf ${j.confidence}`;
-    $("#title").textContent=j.title||(preset==="bug"?"Issue":"Result");
-    $("#title").style.color="var(--ink)";$("#title").style.fontWeight="700";
-    $("#body").textContent=j.rewrite||"(no rewrite)";
-    $("#file").disabled=(preset!=="bug");$("#copy").disabled=false;
+    if(!j.rewrite){
+      $("#title").textContent="Rewrite unavailable";$("#title").style.color="var(--accent)";$("#title").style.fontWeight="700";
+      $("#body").innerHTML=`<div class="empty" style="color:var(--accent)">The rewrite didn't come through (${j.llm_error||"empty"}). Hold the mic and say it again as a full sentence or two.</div>`;
+      $("#file").disabled=true;$("#copy").disabled=true;
+    }else{
+      $("#title").textContent=j.title||(preset==="bug"?"Issue":"Result");
+      $("#title").style.color="var(--ink)";$("#title").style.fontWeight="700";
+      $("#body").textContent=j.rewrite;
+      $("#file").disabled=(preset!=="bug");$("#copy").disabled=false;
+    }
   }catch(e){fail(e.message);}
   busy=false;$("#mic").textContent="Hold to talk";
   $("#hint").innerHTML='Hold the button or press <span class="kbd">Space</span>.<br>Speak naturally — <b>Hindi, English, or both.</b>';

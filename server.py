@@ -15,7 +15,8 @@ PRESETS = {
     "bug": ("Translate to clear professional English and rewrite as a GitHub bug report. "
             "First line must be 'TITLE: ' followed by a concise title under 10 words. "
             "Then markdown sections: ## Summary, ## Steps to Reproduce, ## Expected, "
-            "## Actual, ## Environment. Infer reasonable steps from what was said."),
+            "## Actual, ## Environment. Infer reasonable steps from what was said. "
+            "Keep every section to one or two short lines so the whole issue stays compact."),
     "message": ("Translate to clear, professional English and rewrite as a concise, "
                 "polite message ready to send. No greeting or signature."),
     "commit": ("Translate to English and rewrite as a single Conventional Commit line "
@@ -37,15 +38,27 @@ def report():
     if preset != "default":  # "default" sends no config -> the API's default cleanup
         config = {"language_codes": ["hi", "en"], "llm_instruction": PRESETS.get(preset, PRESETS["bug"])}
         data["config"] = json.dumps(config)
-    r = requests.post(URL, headers={"Authorization": KEY},
-                      files={"audio": ("clip.wav", wav, "audio/wav")},
-                      data=data, timeout=90)
-    if r.status_code != 200:
-        return jsonify(error=f"API {r.status_code}: {r.text[:300]}"), 502
-    j = r.json()
-    rewrite = j.get("llm_response") or j.get("text", "")
+    j = None
+    for _ in range(3):  # rewrite intermittently returns llm_error "truncated"; retry
+        r = requests.post(URL, headers={"Authorization": KEY},
+                          files={"audio": ("clip.wav", wav, "audio/wav")},
+                          data=data, timeout=90)
+        if r.status_code != 200:
+            return jsonify(error=f"API {r.status_code}: {r.text[:300]}"), 502
+        j = r.json()
+        if preset == "default" or j.get("llm_response"):
+            break
+    # Structured rewrite truncated upstream: fall back to a plain English translation.
+    if not j.get("llm_response") and preset != "default":
+        fb = {"language_codes": ["hi", "en"], "llm_instruction": "Translate to clear professional English and fix punctuation. Do not restructure."}
+        rr = requests.post(URL, headers={"Authorization": KEY},
+                           files={"audio": ("clip.wav", wav, "audio/wav")},
+                           data={"config": json.dumps(fb)}, timeout=90)
+        if rr.status_code == 200 and rr.json().get("llm_response"):
+            j = rr.json()
+    rewrite = j.get("llm_response") or ""  # empty when even the fallback failed; do NOT fall back to the transcript
     title = ""
-    if preset == "bug" and rewrite.startswith("TITLE:"):
+    if rewrite and preset == "bug" and rewrite.startswith("TITLE:"):
         head, _, rest = rewrite.partition("\n")
         title = head[6:].strip()
         rewrite = rest.strip()
